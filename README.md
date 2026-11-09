@@ -95,11 +95,12 @@ It also checks the security boundaries: cleaners cannot see each other's pay, ca
 
 1. Push this folder to a GitHub repository and import it in Vercel.
 2. Add every variable from `.env.example` under Project → Settings → Environment Variables.
-3. Deploy. `vercel.json` schedules two cron jobs:
-   - `/api/cron/attendance` every 10 min. It detects missed clock-ins and forgotten clock-outs.
-   - `/api/cron/notifications` every 5 min. It sends queued emails.
-
-   Vercel Hobby plans only allow daily crons. Use a Pro plan, or call both URLs from any external scheduler with the header `Authorization: Bearer <CRON_SECRET>`.
+3. Deploy. `vercel.json` schedules both background jobs once a day, which the free Hobby plan allows. For timely alerts, run them more often:
+   - **Vercel Pro:** change the schedules in `vercel.json` to `*/10 * * * *` (attendance) and `*/5 * * * *` (notifications).
+   - **Free alternative:** create two jobs at cron-job.org (or any scheduler) that call
+     `https://<your-app>/api/cron/attendance` every 10 min and `https://<your-app>/api/cron/notifications` every 5 min,
+     each with the header `Authorization: Bearer <CRON_SECRET>`.
+   - `/api/cron/attendance` detects missed clock-ins and forgotten clock-outs. `/api/cron/notifications` sends queued emails.
 4. In Supabase, update the Site URL and Redirect URLs to the production domain.
 
 GPS and camera need **HTTPS**. Browsers will not share location over plain HTTP, except on `localhost`.
