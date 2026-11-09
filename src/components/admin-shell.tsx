@@ -6,7 +6,7 @@ import {
   LayoutDashboard, CalendarDays, MapPin, Clock, Wallet, Users, Plane, Building2, ShieldCheck, ListChecks,
   Megaphone, BarChart3, Settings, History, Menu, X, LogOut,
 } from 'lucide-react';
-import { Wordmark } from './brand';
+import { Logo } from './brand';
 import { NotificationBell } from './notification-bell';
 import { cx } from './ui';
 
@@ -80,7 +80,7 @@ export function AdminShell({ user, unread, children }: { user: { id: string; ful
       {/* desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-stone-200 bg-white lg:flex">
         <Link href="/admin" className="block border-b border-stone-200 px-6 py-5">
-          <Wordmark compact />
+          <Logo className="h-auto w-44" />
           <div className="mt-2 text-[11px] font-medium uppercase tracking-wider text-sage-700">Operations Hub</div>
         </Link>
         {nav}
@@ -93,7 +93,7 @@ export function AdminShell({ user, unread, children }: { user: { id: string; ful
           <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
           <aside className="absolute inset-y-0 left-0 flex w-72 flex-col bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4">
-              <Wordmark compact />
+              <Logo className="h-auto w-36" />
               <button onClick={() => setOpen(false)} aria-label="Close menu" className="rounded-lg p-1.5 hover:bg-stone-100"><X className="size-5" /></button>
             </div>
             {nav}
@@ -105,7 +105,7 @@ export function AdminShell({ user, unread, children }: { user: { id: string; ful
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-stone-200 bg-white/85 px-4 backdrop-blur sm:px-6">
         <div className="flex items-center gap-3">
           <button className="rounded-lg p-1.5 hover:bg-stone-100 lg:hidden" onClick={() => setOpen(true)} aria-label="Open menu"><Menu className="size-5" /></button>
-          <span className="font-display text-sm tracking-wider text-stone-500 lg:hidden">HERITAGE</span>
+          <Logo className="h-7 w-auto lg:hidden" />
         </div>
         <div className="flex items-center gap-2">
           <NotificationBell userId={user.id} initialUnread={unread} href="/admin/notifications" />

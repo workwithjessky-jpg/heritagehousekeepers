@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { House, CalendarDays, Clock, Wallet, User } from 'lucide-react';
 import { NotificationBell } from './notification-bell';
+import { Logo } from './brand';
 import { cx } from './ui';
 
 const TABS = [
@@ -19,10 +20,7 @@ export function CleanerShell({ userId, unread, children }: { userId: string; unr
   return (
     <div className="min-h-dvh bg-cream pb-[calc(72px+env(safe-area-inset-bottom))]">
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-stone-200 bg-white/90 px-4 backdrop-blur">
-        <Link href="/app" className="leading-none">
-          <span className="font-display text-base tracking-[0.14em] text-ink">HERITAGE</span>
-          <span className="ml-2 font-display text-[10px] tracking-[0.3em] text-stone-500">HOUSEKEEPERS</span>
-        </Link>
+        <Link href="/app" aria-label="Home"><Logo className="h-9 w-auto" /></Link>
         <NotificationBell userId={userId} initialUnread={unread} href="/app/notifications" />
       </header>
       <main className="mx-auto max-w-xl px-4 py-5">{children}</main>
