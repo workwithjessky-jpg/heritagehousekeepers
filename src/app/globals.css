@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sage-50: #f3f6f1;
+  --color-sage-100: #e3eadd;
+  --color-sage-200: #c8d5bd;
+  --color-sage-300: #a7bb98;
+  --color-sage-400: #86a076;
+  --color-sage-500: #6b875c;
+  --color-sage-600: #556d49;
+  --color-sage-700: #44583b;
+  --color-sage-800: #384832;
+  --color-sage-900: #2e3b2a;
+  --color-cream: #faf8f4;
+  --color-sand: #f2eee6;
+  --color-ink: #23272a;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-marcellus), Georgia, serif;
+}
+
+html { -webkit-tap-highlight-color: transparent; }
+body {
+  background: var(--color-cream);
+  color: #2f3336;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Leaflet map container needs explicit sizing inside flex/grid */
+.leaflet-container { width: 100%; height: 100%; border-radius: 0.75rem; font-family: var(--font-sans); }
+
+@media print {
+  aside, nav, .no-print { display: none !important; }
+  body { background: white; }
+}
