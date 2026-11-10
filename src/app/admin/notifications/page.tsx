@@ -1,6 +1,7 @@
 import { requireRole, STAFF, getSettings } from '@/lib/auth';
 import { PageHeader } from '@/components/ui';
 import { NotificationList } from '@/components/notification-list';
+import { PushToggle } from '@/components/push-toggle';
 
 export const metadata = { title: 'Notifications' };
 
@@ -10,7 +11,7 @@ export default async function AdminNotificationsPage() {
   return (
     <>
       <PageHeader title="Notification center" subtitle="Live alerts for clock-ins, exceptions, requests and schedule changes. Configure which events notify you in Settings." />
-      <div className="max-w-3xl"><NotificationList tz={timezone} /></div>
+      <div className="max-w-3xl space-y-4"><PushToggle /><NotificationList tz={timezone} /></div>
     </>
   );
 }
