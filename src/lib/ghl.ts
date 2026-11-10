@@ -312,7 +312,7 @@ export async function retryFailedGhlSyncs(db: Db) {
 
 // ------------------------------------------------------------------ outbound (staff alerts → GHL workflow → text the office)
 // Set GHL_ALERTS_WEBHOOK_URL to the URL of a GHL workflow with the "Inbound Webhook" trigger.
-// The workflow can then text/email the office (e.g. "Send Internal Notification" → SMS) using {{inboundWebhookRequest.message}}.
+// The workflow texts the OFFICE ("Send Internal Notification" → SMS to staff), never the client: the payload carries no client phone/contact id.
 export type GhlAlertEvent = 'on_my_way' | 'clock_in' | 'clock_out';
 export const alertsWebhookUrl = () => clean(process.env.GHL_ALERTS_WEBHOOK_URL);
 
@@ -340,7 +340,7 @@ export async function sendGhlAlert(db: Db, event: GhlAlertEvent, attendanceOrJob
       event, message,
       cleaner_name: emp.full_name, cleaner_phone: emp.phone,
       job_title: job.title, job_start: time(job.scheduled_start), address: where,
-      client_name: (job as any).client?.name ?? null, client_phone: (job as any).client?.phone ?? null, contact_id: (job as any).client?.ghl_contact_id ?? null,
+      client_name: (job as any).client?.name ?? null, // no client phone or contact id: these alerts are for the office only
       link: site ? `${site}/admin/jobs/${job.id}` : null,
       ...x,
     };
