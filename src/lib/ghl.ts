@@ -45,8 +45,25 @@ export type GhlEvent = {
   cleaningType: string | null;
   price: number | null;
   instructions: string | null;
+  home: GhlHome;
   test: boolean;
 };
+/** Details from the contact's own custom fields (Cleaning Type, Access Instructions, …). */
+export type GhlHome = {
+  accessInstructions: string | null; specialNotes: string | null; bedrooms: number | null; bathrooms: number | null;
+  squareFeet: number | null; frequency: 'weekly' | 'biweekly' | 'monthly' | null;
+};
+
+const keyNorm = (k: string) => k.toLowerCase().replace(/[^a-z0-9]/g, '');
+const fieldText = (v: any): string => Array.isArray(v) ? v.map(fieldText).filter(Boolean).join(', ') : s(v);
+const firstNumber = (v: string) => { const m = v.replace(/,/g, '').match(/\d+(\.\d+)?/); return m ? Number(m[0]) : null; };
+function toFrequency(v: string): GhlHome['frequency'] {
+  const t = v.toLowerCase();
+  if (/bi-?weekly|every (other|2|two) week/.test(t)) return 'biweekly';
+  if (/week/.test(t)) return 'weekly';
+  if (/month|4 week|four week/.test(t)) return 'monthly';
+  return null;
+}
 
 /** Normalises the GHL workflow webhook body (standard contact fields + `calendar` object + custom data). */
 export function parseGhlPayload(body: any): GhlEvent {
@@ -70,14 +87,37 @@ export function parseGhlPayload(body: any): GhlEvent {
     timezone: s(cal?.selectedTimezone ?? cal?.timezone ?? body?.timezone) || null, address: s(cal?.address) || null,
   } : null;
 
+  // Contact custom fields arrive as top-level keys named after the field ("Cleaning Type", "# Bedrooms", …).
+  const byNorm = new Map<string, any>();
+  for (const [k, v] of Object.entries(body ?? {})) if (typeof v !== 'object' || Array.isArray(v)) byNorm.set(keyNorm(k), v);
+  const field = (...names: string[]) => { for (const n of names) { const v = fieldText(byNorm.get(keyNorm(n))); if (v) return v; } return ''; };
+
+  const notesParts = [
+    field('Special Cleaning Notes'),
+    field('Cleaning Priorities & Preferences') && `Priorities: ${field('Cleaning Priorities & Preferences')}`,
+    field('Pets') && `Pets: ${field('Pets')}`,
+    field('Extras') && `Extras: ${field('Extras')}`,
+  ].filter(Boolean);
+  const bedrooms = firstNumber(field('# Bedrooms', 'Bedrooms'));
+  const bathrooms = firstNumber(field('# Bathrooms', 'Bathrooms'));
+  const sqft = firstNumber(field('Approximate Square Footage', 'Home Size', 'Square Footage'));
+  const home: GhlHome = {
+    accessInstructions: field('Access Instructions') || null,
+    specialNotes: notesParts.join('\n') || null,
+    bedrooms, bathrooms, squareFeet: sqft != null ? Math.round(sqft) : null,
+    frequency: toFrequency(field('Cleaning Frequency', 'Visit Frequency')),
+  };
+
   const priceStr = pick('price', 'job_price');
   return {
     kind: appointment ? 'appointment' : 'contact',
     contact: contactId ? { id: contactId, name, email: s(body?.email ?? body?.contact?.email).toLowerCase() || null, phone: s(body?.phone ?? body?.contact?.phone) || null, address, tags } : null,
     appointment,
-    cleaningType: pick('cleaning_type', 'service', 'service_type') || null,
+    // The contact's own "Cleaning Type" field wins over a fixed value in the workflow's Custom Data.
+    cleaningType: field('Cleaning Type', 'Service Type') || pick('cleaning_type', 'service', 'service_type') || null,
     price: priceStr && !Number.isNaN(Number(priceStr)) ? Number(priceStr) : null,
-    instructions: pick('instructions', 'job_notes') || null,
+    instructions: [pick('instructions', 'job_notes'), home.specialNotes].filter(Boolean).join('\n') || null,
+    home,
     test: pick('test') === 'true',
   };
 }
@@ -112,14 +152,27 @@ async function upsertClient(db: Db, c: GhlContact, test: boolean) {
 
 const norm = (a: string) => a.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-async function upsertProperty(db: Db, clientId: string, address: string, test: boolean, cleaningType: string | null) {
-  const { data: props } = await db.from('properties').select('id,address').eq('client_id', clientId);
-  const hit = (props ?? []).find((p: any) => norm(p.address) === norm(address));
-  if (hit) return { id: hit.id as string, created: false, geocoded: true };
+async function upsertProperty(db: Db, clientId: string, address: string, test: boolean, cleaningType: string | null, home: GhlHome) {
+  const fromGhl: Record<string, any> = {
+    cleaning_type: cleaningType, access_instructions: home.accessInstructions, special_instructions: home.specialNotes,
+    bedrooms: home.bedrooms, bathrooms: home.bathrooms, square_feet: home.squareFeet, recurring_frequency: home.frequency,
+  };
+  const { data: props } = await db.from('properties').select('id,address,cleaning_type,access_instructions,special_instructions,bedrooms,bathrooms,square_feet,recurring_frequency').eq('client_id', clientId);
+  const hit: any = (props ?? []).find((p: any) => norm(p.address) === norm(address));
+  if (hit) {
+    // Fill in only what the office hasn't entered yet — never overwrite edits made in the Ops Hub.
+    const patch: Record<string, any> = {};
+    for (const [k, v] of Object.entries(fromGhl)) {
+      const empty = hit[k] == null || hit[k] === '' || (k === 'recurring_frequency' && hit[k] === 'none');
+      if (v != null && v !== '' && empty) patch[k] = v;
+    }
+    if (Object.keys(patch).length) { const { error } = await db.from('properties').update(patch).eq('id', hit.id); if (error) throw error; }
+    return { id: hit.id as string, created: false, geocoded: true };
+  }
   const g = await geocodeAddress(address);
   const { data, error } = await db.from('properties').insert({
     client_id: clientId, name: address.split(',')[0] || 'Residence', address, latitude: g?.lat ?? null, longitude: g?.lng ?? null,
-    cleaning_type: cleaningType, is_demo: test, special_instructions: null,
+    is_demo: test, ...Object.fromEntries(Object.entries(fromGhl).filter(([, v]) => v != null && v !== '')),
   }).select('id').single();
   if (error) throw error;
   return { id: data.id as string, created: true, geocoded: !!g };
@@ -135,7 +188,7 @@ export async function handleGhlEvent(db: Db, ev: GhlEvent): Promise<Result> {
   const address = ev.appointment?.address || ev.contact.address;
   let propertyId: string | null = null;
   if (address) {
-    const p = await upsertProperty(db, client.id, address, ev.test, ev.cleaningType);
+    const p = await upsertProperty(db, client.id, address, ev.test, ev.cleaningType, ev.home);
     propertyId = p.id;
     if (p.created) notes.push(p.geocoded ? 'property created (mapped)' : 'property created (address not found on map — add coordinates)');
   }
@@ -174,10 +227,19 @@ export async function handleGhlEvent(db: Db, ev: GhlEvent): Promise<Result> {
     return { status: 'ignored', message: 'Booking has no address — add the address to the GHL contact so the job can be created', client_id: client.id };
   }
   const types: string[] = settings?.job_types ?? ['Standard Residential'];
-  const type = (ev.cleaningType && types.find((t) => t.toLowerCase() === ev.cleaningType!.toLowerCase()))
-    ?? types.find((t) => `${a.title} ${a.calendarName}`.toLowerCase().includes(t.toLowerCase().split(' ')[0]))
-    ?? types[0];
-  const { data: checklist } = await db.from('cleaning_checklists').select('id').eq('cleaning_type', type).eq('is_active', true).limit(1).maybeSingle();
+  let type = (ev.cleaningType && types.find((t) => t.toLowerCase() === ev.cleaningType!.toLowerCase()))
+    ?? (ev.cleaningType ? null : types.find((t) => `${a.title} ${a.calendarName}`.toLowerCase().includes(t.toLowerCase().split(' ')[0])))
+    ?? null;
+  if (!type && ev.cleaningType && !ev.test) {
+    // A cleaning type used in GHL (e.g. "Classic Clean") that the Ops Hub doesn't know yet: add it to Settings → Job types.
+    type = ev.cleaningType;
+    const { error: e } = await db.from('company_settings').update({ job_types: [...types, type] }).eq('id', 1);
+    if (!e) notes.push(`new cleaning type "${type}" added to Settings`);
+  }
+  type = type ?? ev.cleaningType ?? types[0];
+  // Use the type's own checklist, or the default one until a checklist is made for it.
+  const findChecklist = (t: string) => db.from('cleaning_checklists').select('id').eq('cleaning_type', t).eq('is_active', true).limit(1).maybeSingle();
+  const checklist = (await findChecklist(type)).data ?? (await findChecklist(types[0])).data;
   const price = ev.price ?? (settings?.service_pricing ?? []).find((p: any) => p.service === type)?.price ?? null;
   const start = ghlTimeToUtc(a.start, a.timezone || tz);
   const end = a.end ? ghlTimeToUtc(a.end, a.timezone || tz) : new Date(new Date(start).getTime() + 3 * 36e5).toISOString();
