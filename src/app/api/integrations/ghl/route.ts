@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
-import { checkWebhookKey, handleGhlEvent, parseGhlPayload } from '@/lib/ghl';
+import { checkWebhookKey, handleGhlEvent, parseGhlPayload, ghlConfigured } from '@/lib/ghl';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,5 +33,9 @@ export async function POST(req: NextRequest) {
 }
 
 export function GET() {
-  return NextResponse.json({ ok: true, info: 'GoHighLevel webhook endpoint. Send POST requests from a GHL workflow.' });
+  // Safe diagnostics: says whether secrets are set, never their values.
+  return NextResponse.json({
+    ok: true, info: 'GoHighLevel webhook endpoint. Send POST requests from a GHL workflow.',
+    secretConfigured: ghlConfigured.inbound(), tokenConfigured: ghlConfigured.outbound(),
+  });
 }

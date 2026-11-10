@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { ghlConfigured } from '@/lib/ghl';
+import { ghlConfigured, webhookSecret } from '@/lib/ghl';
 import { fmtDateTime, titleCase } from '@/lib/format';
 import { Badge, Table, Th, Td, Empty } from '@/components/ui';
 
@@ -11,7 +11,7 @@ export async function IntegrationsTab({ tz }: { tz: string }) {
   const site = (process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/$/, '') || 'https://YOUR-APP.vercel.app';
   const inbound = ghlConfigured.inbound();
   const outbound = ghlConfigured.outbound();
-  const url = `${site}/api/integrations/ghl?key=${process.env.GHL_WEBHOOK_SECRET ?? 'SET-GHL_WEBHOOK_SECRET'}`;
+  const url = `${site}/api/integrations/ghl?key=${webhookSecret() || 'SET-GHL_WEBHOOK_SECRET'}`;
   const tag = process.env.GHL_COMPLETED_TAG || 'cleaning-completed';
 
   return (

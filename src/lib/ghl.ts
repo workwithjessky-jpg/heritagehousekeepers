@@ -13,13 +13,19 @@ import { zonedToUtc } from './format';
  *            through the GHL API (GHL_PRIVATE_TOKEN), so a GHL workflow can send review requests etc.
  */
 
+/** Env values pasted into dashboards often pick up spaces, newlines or quotes — strip them. */
+const clean = (v: string | undefined) => (v ?? '').trim().replace(/^["']|["']$/g, '').trim();
+export const webhookSecret = () => clean(process.env.GHL_WEBHOOK_SECRET);
+export const privateToken = () => clean(process.env.GHL_PRIVATE_TOKEN);
+
 export const ghlConfigured = {
-  inbound: () => Boolean(process.env.GHL_WEBHOOK_SECRET),
-  outbound: () => Boolean(process.env.GHL_PRIVATE_TOKEN),
+  inbound: () => Boolean(webhookSecret()),
+  outbound: () => Boolean(privateToken()),
 };
 
 export function checkWebhookKey(key: string | null) {
-  const secret = process.env.GHL_WEBHOOK_SECRET;
+  const secret = webhookSecret();
+  key = key?.trim() ?? null;
   if (!secret || !key) return false;
   const a = Buffer.from(key), b = Buffer.from(secret);
   return a.length === b.length && timingSafeEqual(a, b);
@@ -194,7 +200,7 @@ const GHL_API = 'https://services.leadconnectorhq.com';
 async function ghlAddTag(contactId: string, tag: string) {
   const res = await fetch(`${GHL_API}/contacts/${encodeURIComponent(contactId)}/tags`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.GHL_PRIVATE_TOKEN}`, Version: '2021-07-28', 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: { Authorization: `Bearer ${privateToken()}`, Version: '2021-07-28', 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ tags: [tag] }),
     signal: AbortSignal.timeout(10000),
   });
