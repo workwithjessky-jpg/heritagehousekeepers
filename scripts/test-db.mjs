@@ -134,7 +134,12 @@ async function main() {
   check('weekly recurring series creates 4 linked jobs 3 weeks apart', gaps[0].n === 4 && gaps[0].g === 1 && String(gaps[0].span?.days ?? gaps[0].span).startsWith('21'), JSON.stringify(gaps[0]));
 
   // ---------------------------------------------------------------- Workflow 2
-  console.log('\nWorkflow 2 — GPS clock-in');
+  console.log('\nWorkflow 2 — On my way + GPS clock-in');
+  await expectFail('only assigned cleaners can say they are on the way', () => as(ids.b, `select mark_on_my_way($1, 15)`, [overlapIds[0]]), /not assigned/);
+  const [{ mark_on_my_way: omw }] = await as(ids.a, `select mark_on_my_way($1, 15)`, [job]);
+  check('"On my way" recorded with ETA', omw?.eta_minutes === 15 && omw?.employee === 'Jane Smith', JSON.stringify(omw));
+  const omwN = await as(ids.ops, `select title, body from notifications where type = 'on_my_way'`);
+  check('office notified that the cleaner is on the way', omwN.length === 1 && omwN[0].title.includes('Jane') && /15 min/.test(omwN[0].body), JSON.stringify(omwN));
   await expectFail('clock-in requires location policy consent', () => as(ids.a, `select clock_in($1, 40.7130, -74.0062, 10)`, [job]), /location policy/);
   await as(ids.a, `select record_location_consent()`);
   await expectFail('clock-in without GPS requires an exception reason', () => as(ids.a, `select clock_in($1)`, [job]), /reason/);
@@ -145,6 +150,7 @@ async function main() {
   check('location history row stored', gps.length === 1 && gps[0].within_geofence === true);
   const adminN = await as(ids.ops, `select title from notifications where type = 'clock_in'`);
   check('manager notified of clock-in', adminN.length === 1 && adminN[0].title.includes('Jane'));
+  await expectFail('"On my way" refused after clocking in', () => as(ids.a, `select mark_on_my_way($1)`, [job]), /already clocked in/);
   await expectFail('duplicate open clock-in prevented', () => as(ids.a, `select clock_in($1, 40.7130, -74.0062, 10)`, [job]), /already clocked in/);
   const status = await su(`select status from cleaning_jobs where id = $1`, [job]);
   check('job moves to In Progress', status[0].status === 'in_progress');

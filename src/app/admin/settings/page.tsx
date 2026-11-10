@@ -10,7 +10,7 @@ import { IntegrationsTab } from './integrations';
 export const metadata = { title: 'Settings' };
 
 const EVENTS: [string, string][] = [
-  ['clock_in', 'Cleaner clocks in'], ['clock_out', 'Cleaner clocks out'], ['geofence', 'Clock-in outside geofence / without GPS'],
+  ['on_my_way', 'Cleaner is on the way'], ['clock_in', 'Cleaner clocks in'], ['clock_out', 'Cleaner clocks out'], ['geofence', 'Clock-in outside geofence / without GPS'],
   ['missed_clock_in', 'Missed clock-in'], ['forgot_clock_out', 'Forgot to clock out'], ['timesheet_submitted', 'Timesheet submitted / correction requested'],
   ['time_off', 'Time-off request'], ['issue', 'Issue reported'], ['job_completed', 'Job completed'], ['photos', 'Photos uploaded'], ['schedule_change', 'Schedule changes & cancellations'],
 ];

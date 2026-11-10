@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, Navigation, Clock, MapPin, Users, KeyRound, Phone, TriangleAlert, Info } from 'lucide-react';
+import { ChevronLeft, Navigation, Clock, MapPin, Users, KeyRound, Phone, TriangleAlert, Info, Car } from 'lucide-react';
 import { requireRole, getSettings } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { fmtTime, fmtDateTime, mapsUrl, titleCase } from '@/lib/format';
@@ -8,7 +8,7 @@ import { Card, CardHeader, CardBody, StatusBadge, JOB_STATUS, Badge, Select, Tex
 import { ActionForm, ActionButton, SubmitButton } from '@/components/forms';
 import { ClockPanel } from './clock-panel';
 import { Checklist, PhotoButton } from './job-work';
-import { confirmJob, reportIssue } from '../../actions';
+import { confirmJob, reportIssue, onMyWay } from '../../actions';
 
 export const metadata = { title: 'Job' };
 
@@ -25,7 +25,7 @@ export default async function CleanerJobPage({ params }: { params: Promise<{ id:
 
   const [team, myAssign, myAttendance, openAny, codes, tasks, subs, photos, profile, completion, myIssues] = await Promise.all([
     supabase.rpc('job_team', { p_job: id }),
-    supabase.from('job_assignments').select('status,is_team_lead').eq('job_id', id).eq('employee_id', me.id).maybeSingle(),
+    supabase.from('job_assignments').select('status,is_team_lead,on_my_way_at,eta_minutes').eq('job_id', id).eq('employee_id', me.id).maybeSingle(),
     supabase.from('attendance_records').select('id,clock_in_at,clock_out_at,clock_in_location').eq('job_id', id).order('clock_in_at'),
     supabase.from('attendance_records').select('id,job_id').is('clock_out_at', null).maybeSingle(),
     supabase.from('property_access_codes').select('*').eq('property_id', job.property_id).maybeSingle(),
@@ -69,8 +69,28 @@ export default async function CleanerJobPage({ params }: { params: Promise<{ id:
         </CardBody>
       </Card>
 
-      {myAssign.data?.status === 'assigned' && !closed && (
+      {myAssign.data?.status === 'assigned' && !closed && !myAssign.data?.on_my_way_at && (
         <ActionButton action={confirmJob} fields={{ job_id: id }} variant="secondary" size="lg" className="w-full [&>button]:w-full">Confirm I&apos;ll be there</ActionButton>
+      )}
+
+      {/* On my way — before the cleaner has clocked in to this job */}
+      {myAssign.data && !closed && (myAttendance.data ?? []).length === 0 && (
+        myAssign.data.on_my_way_at ? (
+          <div className="flex items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-[15px] text-sky-900">
+            <Car className="size-5 shrink-0" />
+            <div>You told the office you&apos;re on the way at {fmtTime(myAssign.data.on_my_way_at, tz)}{myAssign.data.eta_minutes ? ` (about ${myAssign.data.eta_minutes} min)` : ''}.
+              <div className="text-sm text-sky-800/80">Clock in below when you arrive.</div></div>
+          </div>
+        ) : (
+          <ActionForm action={onMyWay} className="flex gap-2">
+            <input type="hidden" name="job_id" value={id} />
+            <Select name="eta_minutes" defaultValue="" aria-label="Arriving in" className="h-14 w-32 shrink-0 text-base">
+              <option value="">ETA</option>
+              {[5, 10, 15, 20, 30, 45, 60].map((m) => <option key={m} value={m}>{m} min</option>)}
+            </Select>
+            <SubmitButton size="lg" className="h-14 flex-1 text-base" pendingText="Letting the office know…"><Car className="size-5" /> I&apos;m on my way</SubmitButton>
+          </ActionForm>
+        )
       )}
 
       {(job.instructions || p.special_instructions || p.access_instructions) && (

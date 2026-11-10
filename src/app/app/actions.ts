@@ -1,11 +1,30 @@
 'use server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { syncJobCompleted } from '@/lib/ghl';
+import { after } from 'next/server';
+import { syncJobCompleted, sendGhlAlert, type GhlAlertEvent } from '@/lib/ghl';
 import { getSettings } from '@/lib/auth';
 import { run, must, str, num, bool, required, type ActionState } from '@/lib/actions';
 import { zonedToUtc } from '@/lib/format';
 
 // Cleaner self-service actions. Every RPC re-checks auth.uid() + assignment in the database.
+
+/** After the response is sent, tell the GHL alerts workflow (texts the office). The cleaner never waits on it. */
+function alertGhlLater(event: GhlAlertEvent, jobId: string, employeeId: string, extra?: Record<string, any>) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.GHL_ALERTS_WEBHOOK_URL) return;
+  after(() => sendGhlAlert(createAdminClient(), event, { jobId, employeeId, extra }));
+}
+
+export async function onMyWay(_p: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const supabase = await createClient();
+    const jobId = required(fd, 'job_id');
+    const eta = num(fd, 'eta_minutes');
+    const r = must(await supabase.rpc('mark_on_my_way', { p_job: jobId, p_eta: eta })) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    alertGhlLater('on_my_way', jobId, user!.id, { eta_minutes: eta });
+    return `The office knows you're on the way${r?.eta_minutes ? ` (about ${r.eta_minutes} min)` : ''}. Drive safe!`;
+  }, ['/app']);
+}
 
 export async function acceptLocationPolicy(): Promise<ActionState> {
   return run(async () => {
@@ -32,6 +51,7 @@ export async function clockIn(input: { jobId: string; lat: number | null; lng: n
     const msg = rec.clock_in_location === 'verified' ? `Clocked in — location verified (${Math.round(rec.clock_in_distance_m)} m from the property).`
       : rec.clock_in_location === 'outside_geofence' ? `Clocked in, but you are ${Math.round(rec.clock_in_distance_m)} m from the property. Your manager has been notified.`
       : 'Clocked in without GPS. A manager will review your reason.';
+    alertGhlLater('clock_in', input.jobId, rec.employee_id, { location: rec.clock_in_location, distance_m: rec.clock_in_distance_m });
     return { message: msg, data: rec };
   }, ['/app']);
 }
@@ -44,6 +64,7 @@ export async function clockOut(input: { attendanceId: string; lat: number | null
       p_break_minutes: input.breakMinutes, p_completion_exception: input.exception ?? null, p_notes: input.notes ?? null,
     })) as any;
     if (ts.job_id && process.env.SUPABASE_SERVICE_ROLE_KEY) await syncJobCompleted(createAdminClient(), ts.job_id); // GHL: tag client when the job completed
+    if (ts.job_id) alertGhlLater('clock_out', ts.job_id, ts.employee_id, { total_hours: ts.total_hours });
     return { message: `Clocked out — ${Number(ts.total_hours).toFixed(2)} hours added to your timesheet.`, data: ts };
   }, ['/app']);
 }

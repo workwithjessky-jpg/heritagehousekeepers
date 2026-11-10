@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { MapPin, Navigation, Star, Users, Camera, ListChecks, TriangleAlert, Clock } from 'lucide-react';
+import { MapPin, Navigation, Star, Users, Camera, ListChecks, TriangleAlert, Clock, Download } from 'lucide-react';
 import { requireRole, STAFF, getSettings, isSupervisor } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { fmtDateTime, fmtTime, fmtMoney, mapsUrl, utcToZonedInput, titleCase, fmtHours } from '@/lib/format';
@@ -30,7 +30,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
     .eq('id', id).single();
   if (!job) notFound();
 
-  const [team, recs, attendance, tasks, subs, photos, issues, timesheets, checklists, followUps] = await Promise.all([
+  const [team, recs, attendance, tasks, subs, photos, issues, timesheets, checklists, followUps, enRoute] = await Promise.all([
     supabase.rpc('job_team', { p_job: id }),
     ['completed', 'cancelled'].includes(job.status) ? Promise.resolve({ data: [] }) : supabase.rpc('recommend_cleaners', { p_job: id }),
     supabase.from('attendance_records').select('*, user:users!attendance_records_employee_id_fkey(full_name)').eq('job_id', id).order('clock_in_at'),
@@ -41,6 +41,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
     supabase.from('timesheets').select('id,total_hours,status,flags,user:users!timesheets_employee_id_fkey(full_name)').eq('job_id', id),
     supabase.from('cleaning_checklists').select('id,name').eq('is_active', true).order('name'),
     supabase.from('cleaning_jobs').select('id,title,scheduled_start,status').eq('parent_job_id', id),
+    supabase.from('job_assignments').select('employee_id,on_my_way_at,eta_minutes').eq('job_id', id).not('on_my_way_at', 'is', null),
   ]);
 
   const paths = [...(photos.data ?? []).map((p: any) => p.storage_path), ...(subs.data ?? []).filter((x: any) => x.photo_path).map((x: any) => x.photo_path)];
@@ -185,7 +186,8 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
 
           {/* photos */}
           <Card>
-            <CardHeader title={<span className="inline-flex items-center gap-2"><Camera className="size-4" />Photos</span>} subtitle={`${(photos.data ?? []).length} uploaded`} />
+            <CardHeader title={<span className="inline-flex items-center gap-2"><Camera className="size-4" />Photos</span>} subtitle={`${(photos.data ?? []).length} uploaded`}
+              action={paths.length > 0 && <a href={`/api/export/job-photos/${job.id}`} className="inline-flex items-center gap-1.5 text-sm font-medium text-sage-700 hover:underline"><Download className="size-4" /> Download all</a>} />
             <CardBody>
               {(photos.data ?? []).length === 0 ? <p className="text-sm text-stone-500">No photos yet.</p> : (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -251,7 +253,9 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
                 <div key={m.employee_id} className="rounded-xl border border-stone-200 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <Link href={`/admin/employees/${m.employee_id}`} className="text-sm font-medium text-ink hover:text-sage-700">{m.full_name}</Link>
-                    <div className="flex gap-1">{m.is_team_lead && <Badge tone="sage">Lead</Badge>}<Badge tone={m.status === 'confirmed' ? 'indigo' : 'gray'}>{titleCase(m.status)}</Badge></div>
+                    <div className="flex flex-wrap justify-end gap-1">{m.is_team_lead && <Badge tone="sage">Lead</Badge>}<Badge tone={m.status === 'confirmed' ? 'indigo' : 'gray'}>{titleCase(m.status)}</Badge>
+                      {(() => { const w = (enRoute.data as any[] ?? []).find((e) => e.employee_id === m.employee_id); return w && !(attendance.data as any[] ?? []).some((a) => a.employee_id === m.employee_id)
+                        ? <Badge tone="blue">On the way · {fmtTime(w.on_my_way_at, tz)}{w.eta_minutes ? ` · ${w.eta_minutes} min` : ''}</Badge> : null; })()}</div>
                   </div>
                   {!closed && (
                     <div className="mt-2 flex flex-wrap items-center gap-2">

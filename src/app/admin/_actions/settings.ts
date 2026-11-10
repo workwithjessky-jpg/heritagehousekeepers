@@ -50,7 +50,7 @@ export async function saveSettings(_p: ActionState, fd: FormData): Promise<Actio
         };
         break;
       case 'notifications': {
-        const events = ['clock_in', 'clock_out', 'geofence', 'missed_clock_in', 'forgot_clock_out', 'timesheet_submitted', 'time_off', 'issue', 'job_completed', 'photos', 'schedule_change'];
+        const events = ['on_my_way', 'clock_in', 'clock_out', 'geofence', 'missed_clock_in', 'forgot_clock_out', 'timesheet_submitted', 'time_off', 'issue', 'job_completed', 'photos', 'schedule_change'];
         patch = {
           notification_prefs: {
             email_enabled: bool(fd, 'email_enabled'),

@@ -276,7 +276,7 @@ export async function syncJobCompleted(db: Db, jobId: string) {
     const contactId = (job as any)?.client?.ghl_contact_id;
     if (!job || job.status !== 'completed' || !contactId) return;
     const tag = process.env.GHL_COMPLETED_TAG || 'cleaning-completed';
-    const { data: already } = await db.from('integration_events').select('id').eq('direction', 'out').eq('job_id', jobId).eq('status', 'ok').limit(1).maybeSingle();
+    const { data: already } = await db.from('integration_events').select('id').eq('direction', 'out').eq('event', 'job_completed').eq('job_id', jobId).eq('status', 'ok').limit(1).maybeSingle();
     if (already) return;
     if (!ghlConfigured.outbound()) {
       await db.from('integration_events').insert({ direction: 'out', event: 'job_completed', external_id: contactId, status: 'ignored', message: 'GHL_PRIVATE_TOKEN not set', job_id: jobId, client_id: (job as any).client.id });
@@ -296,7 +296,7 @@ export async function syncJobCompleted(db: Db, jobId: string) {
 /** Retries failed outbound syncs (called from the notifications cron). */
 export async function retryFailedGhlSyncs(db: Db) {
   if (!ghlConfigured.outbound()) return 0;
-  const { data } = await db.from('integration_events').select('id,external_id,attempts,payload').eq('direction', 'out').eq('status', 'failed').lt('attempts', 5).limit(20);
+  const { data } = await db.from('integration_events').select('id,external_id,attempts,payload').eq('direction', 'out').eq('event', 'job_completed').eq('status', 'failed').lt('attempts', 5).limit(20);
   let n = 0;
   for (const ev of (data ?? []) as any[]) {
     try {
@@ -308,4 +308,46 @@ export async function retryFailedGhlSyncs(db: Db) {
     }
   }
   return n;
+}
+
+// ------------------------------------------------------------------ outbound (staff alerts → GHL workflow → text the office)
+// Set GHL_ALERTS_WEBHOOK_URL to the URL of a GHL workflow with the "Inbound Webhook" trigger.
+// The workflow can then text/email the office (e.g. "Send Internal Notification" → SMS) using {{inboundWebhookRequest.message}}.
+export type GhlAlertEvent = 'on_my_way' | 'clock_in' | 'clock_out';
+export const alertsWebhookUrl = () => clean(process.env.GHL_ALERTS_WEBHOOK_URL);
+
+/** Sends one event to the GHL alerts workflow. Never throws; failures are logged in Settings → Integrations. */
+export async function sendGhlAlert(db: Db, event: GhlAlertEvent, attendanceOrJob: { jobId: string; employeeId: string; extra?: Record<string, any> }) {
+  const url = alertsWebhookUrl();
+  if (!url) return;
+  try {
+    const [{ data: job }, { data: emp }, { data: settings }] = await Promise.all([
+      db.from('cleaning_jobs').select('id,title,scheduled_start,client:clients(id,name,phone,ghl_contact_id),property:properties(address)').eq('id', attendanceOrJob.jobId).single(),
+      db.from('users').select('full_name,phone').eq('id', attendanceOrJob.employeeId).single(),
+      db.from('company_settings').select('timezone').eq('id', 1).single(),
+    ]);
+    if (!job || !emp) return;
+    const tz = settings?.timezone ?? 'America/Chicago';
+    const time = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
+    const x = attendanceOrJob.extra ?? {};
+    const where = (job as any).property?.address ?? '';
+    const message =
+      event === 'on_my_way' ? `${emp.full_name} is on the way to ${job.title}${x.eta_minutes ? ` (about ${x.eta_minutes} min)` : ''}. ${where}`
+      : event === 'clock_in' ? `${emp.full_name} clocked in at ${job.title} at ${time(new Date().toISOString())}${x.location === 'verified' ? ' (GPS verified)' : x.location === 'outside_geofence' ? ` — ${Math.round(x.distance_m ?? 0)} m from the property` : x.location === 'unavailable' ? ' — no GPS' : ''}.`
+      : `${emp.full_name} clocked out of ${job.title}${x.total_hours != null ? ` after ${Number(x.total_hours).toFixed(2)} h` : ''}.`;
+    const site = (process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/$/, '');
+    const body = {
+      event, message,
+      cleaner_name: emp.full_name, cleaner_phone: emp.phone,
+      job_title: job.title, job_start: time(job.scheduled_start), address: where,
+      client_name: (job as any).client?.name ?? null, client_phone: (job as any).client?.phone ?? null, contact_id: (job as any).client?.ghl_contact_id ?? null,
+      link: site ? `${site}/admin/jobs/${job.id}` : null,
+      ...x,
+    };
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error(`GHL alert webhook ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    await db.from('integration_events').insert({ direction: 'out', event: `alert_${event}`, status: 'ok', message, job_id: job.id, client_id: (job as any).client?.id ?? null });
+  } catch (e: any) {
+    await db.from('integration_events').insert({ direction: 'out', event: `alert_${event}`, status: 'failed', message: String(e?.message ?? e).slice(0, 500), job_id: attendanceOrJob.jobId });
+  }
 }

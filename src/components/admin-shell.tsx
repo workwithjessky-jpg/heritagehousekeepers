@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, CalendarDays, MapPin, Clock, Wallet, Users, Plane, Building2, ShieldCheck, ListChecks,
-  Megaphone, BarChart3, Settings, History, Menu, X, LogOut, Bell, Plus,
+  Megaphone, BarChart3, Settings, History, Menu, X, LogOut, Bell, Plus, Camera,
 } from 'lucide-react';
 import { Logo } from './brand';
 import { NotificationBell } from './notification-bell';
@@ -19,6 +19,7 @@ export const ADMIN_NAV: { href: string; label: string; icon: any; roles: Role[];
   { href: '/admin/schedule', label: 'Schedule & Jobs', icon: CalendarDays, roles: ALL, group: 'Operations', also: ['/admin/jobs'] },
   { href: '/admin/attendance', label: 'Attendance & GPS', icon: MapPin, roles: ALL, group: 'Operations' },
   { href: '/admin/quality', label: 'Quality Control', icon: ShieldCheck, roles: ALL, group: 'Operations' },
+  { href: '/admin/photos', label: 'Photos', icon: Camera, roles: ALL, group: 'Operations' },
   { href: '/admin/timesheets', label: 'Timesheets', icon: Clock, roles: ALL, group: 'People & Pay' },
   { href: '/admin/payroll', label: 'Payroll', icon: Wallet, roles: SUP, group: 'People & Pay' },
   { href: '/admin/employees', label: 'Employees', icon: Users, roles: ALL, group: 'People & Pay' },
