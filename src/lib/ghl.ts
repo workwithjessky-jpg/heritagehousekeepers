@@ -314,7 +314,8 @@ export async function retryFailedGhlSyncs(db: Db) {
 // Set GHL_ALERTS_WEBHOOK_URL to the URL of a GHL workflow with the "Inbound Webhook" trigger.
 // The workflow texts the OFFICE ("Send Internal Notification" → SMS to staff), never the client: the payload carries no client phone/contact id.
 export type GhlAlertEvent = 'on_my_way' | 'clock_in' | 'clock_out';
-export const alertsWebhookUrl = () => clean(process.env.GHL_ALERTS_WEBHOOK_URL);
+/** The webhook URL — if extra text was pasted around it in Vercel, use just the first https:// link. */
+export const alertsWebhookUrl = () => clean(process.env.GHL_ALERTS_WEBHOOK_URL).match(/https:\/\/[^\s"'<>]+/)?.[0] ?? '';
 
 /** Sends one event to the GHL alerts workflow. Never throws; failures are logged in Settings → Integrations. */
 export async function sendGhlAlert(db: Db, event: GhlAlertEvent, attendanceOrJob: { jobId: string; employeeId: string; extra?: Record<string, any> }) {
