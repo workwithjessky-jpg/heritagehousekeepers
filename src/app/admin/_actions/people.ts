@@ -70,6 +70,10 @@ export async function updateEmployeeProfile(_p: ActionState, fd: FormData): Prom
       hire_date: str(fd, 'hire_date'), team: str(fd, 'team'), employee_number: str(fd, 'employee_number'),
       address: str(fd, 'address'), home_latitude: num(fd, 'home_latitude'), home_longitude: num(fd, 'home_longitude'),
       emergency_contact_name: str(fd, 'emergency_contact_name'), emergency_contact_phone: str(fd, 'emergency_contact_phone'),
+      emergency_contact_relationship: str(fd, 'emergency_contact_relationship'),
+      mailing_address: bool(fd, 'mailing_same') ? str(fd, 'address') : str(fd, 'mailing_address'),
+      background_check_status: str(fd, 'background_check_status') ?? 'not_started',
+      background_check_date: str(fd, 'background_check_date'),
     }).eq('user_id', id));
     return 'Profile saved.';
   }, ['/admin/employees']);

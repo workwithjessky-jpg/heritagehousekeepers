@@ -101,3 +101,19 @@ export function titleCase(s: string | null | undefined) {
 export function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
 }
+
+/** Employee document types (employee_documents.category) with friendly labels, most important first. */
+export const DOC_TYPES: [string, string][] = [
+  ['drivers_license', "Driver's license"], ['background_check', 'Background check'], ['resume', 'Résumé'],
+  ['contract', 'Contract'], ['identification', 'Other ID'], ['tax', 'Tax form (W-4 / W-9 / I-9)'],
+  ['certification', 'Certification'], ['training', 'Training'], ['policy', 'Signed policy'], ['other', 'Other'],
+];
+export const docLabel = (c: string | null | undefined) => DOC_TYPES.find(([k]) => k === c)?.[1] ?? titleCase(c);
+
+export const BACKGROUND_STATUS: Record<string, { label: string; tone: 'gray' | 'amber' | 'green' | 'red' | 'blue' }> = {
+  not_started: { label: 'Not started', tone: 'gray' },
+  in_progress: { label: 'In progress', tone: 'blue' },
+  clear: { label: 'Clear', tone: 'green' },
+  needs_review: { label: 'Needs review', tone: 'amber' },
+  not_cleared: { label: 'Not cleared', tone: 'red' },
+};

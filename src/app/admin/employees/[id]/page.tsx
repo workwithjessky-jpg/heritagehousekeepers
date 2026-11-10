@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireRole, STAFF, getSettings, ROLE_LABEL, isSupervisor, type Role } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { fmtDateTime, fmtPlainDate, fmtMoney, titleCase, fmtTime } from '@/lib/format';
+import { fmtDateTime, fmtPlainDate, fmtMoney, titleCase, fmtTime, todayInTz, addDays, DOC_TYPES, docLabel, BACKGROUND_STATUS } from '@/lib/format';
 import {
   Card, CardHeader, CardBody, PageHeader, Field, Input, Select, Textarea, Badge, Checkbox, StatusBadge, LOC_STATUS, REQ_STATUS, Flags, LinkButton, Tabs,
 } from '@/components/ui';
@@ -16,10 +16,11 @@ import { AvailabilityForm } from '@/components/availability-form';
 export const metadata = { title: 'Employee' };
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export default async function EmployeePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
+export default async function EmployeePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; type?: string }> }) {
   const me = await requireRole(STAFF);
   const { id } = await params;
-  const { tab = 'profile' } = await searchParams;
+  const sp = await searchParams;
+  const { tab = 'profile' } = sp;
   const s = await getSettings();
   const tz = s.timezone;
   const supabase = await createClient();
@@ -47,6 +48,8 @@ export default async function EmployeePage({ params, searchParams }: { params: P
         ...(sup ? [{ key: 'performance', label: 'Performance', href: `${base}?tab=performance` }] : []),
       ]} />
 
+      {tab === 'profile' && <PersonnelFile id={id} p={p} u={u} tz={tz} />}
+
       {tab === 'profile' && (
         <Card className="max-w-3xl">
           <CardHeader title="Personal & employment details" />
@@ -67,8 +70,20 @@ export default async function EmployeePage({ params, searchParams }: { params: P
               <Field label="Home address" className="sm:col-span-2"><Input name="address" defaultValue={p.address ?? ''} /></Field>
               <Field label="Home latitude" hint="Optional — improves cleaner recommendations by distance"><Input name="home_latitude" type="number" step="any" defaultValue={p.home_latitude ?? ''} /></Field>
               <Field label="Home longitude"><Input name="home_longitude" type="number" step="any" defaultValue={p.home_longitude ?? ''} /></Field>
+              <Field label="Mailing address" className="sm:col-span-2" hint="Where to send pay stubs, W-2s and letters">
+                <Input name="mailing_address" defaultValue={p.mailing_address ?? ''} />
+              </Field>
+              <div className="-mt-2 sm:col-span-2"><Checkbox name="mailing_same" label="Mailing address is the same as home address" defaultChecked={!p.mailing_address || p.mailing_address === p.address} /></div>
               <Field label="Emergency contact"><Input name="emergency_contact_name" defaultValue={p.emergency_contact_name ?? ''} /></Field>
-              <Field label="Emergency phone"><Input name="emergency_contact_phone" defaultValue={p.emergency_contact_phone ?? ''} /></Field>
+              <Field label="Relationship"><Input name="emergency_contact_relationship" placeholder="e.g. Spouse, Parent" defaultValue={p.emergency_contact_relationship ?? ''} /></Field>
+              <Field label="Emergency phone"><Input name="emergency_contact_phone" type="tel" defaultValue={p.emergency_contact_phone ?? ''} /></Field>
+              <div />
+              <Field label="Background check">
+                <Select name="background_check_status" defaultValue={p.background_check_status ?? 'not_started'}>
+                  {Object.entries(BACKGROUND_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </Select>
+              </Field>
+              <Field label="Background check date"><Input type="date" name="background_check_date" defaultValue={p.background_check_date ?? ''} /></Field>
               <div className="text-sm text-stone-600 sm:col-span-2">Location policy: {p.location_consent_at ? <Badge tone="green">Accepted {fmtDateTime(p.location_consent_at, tz)}</Badge> : <Badge tone="amber">Not yet accepted (asked at first clock-in)</Badge>}</div>
               <div className="sm:col-span-2"><SubmitButton>Save profile</SubmitButton></div>
             </ActionForm>
@@ -137,7 +152,7 @@ export default async function EmployeePage({ params, searchParams }: { params: P
 
       {tab === 'availability' && <Availability id={id} />}
       {tab === 'hr' && <Hr id={id} p={p} />}
-      {tab === 'documents' && <Documents id={id} tz={tz} />}
+      {tab === 'documents' && <Documents id={id} tz={tz} defaultType={sp.type} />}
       {tab === 'attendance' && <AttendanceHistory id={id} tz={tz} currency={s.currency} showPay={me.role !== 'office_admin'} />}
       {tab === 'performance' && sup && <Performance id={id} tz={tz} />}
     </>
@@ -231,7 +246,7 @@ function Hr({ id, p }: { id: string; p: any }) {
   );
 }
 
-async function Documents({ id, tz }: { id: string; tz: string }) {
+async function Documents({ id, tz, defaultType }: { id: string; tz: string; defaultType?: string }) {
   const supabase = await createClient();
   const { data: docs } = await supabase.from('employee_documents').select('*').eq('employee_id', id).order('created_at', { ascending: false });
   const signed = (docs ?? []).length ? (await supabase.storage.from('employee-documents').createSignedUrls((docs ?? []).map((d: any) => d.storage_path), 600)).data ?? [] : [];
@@ -244,7 +259,7 @@ async function Documents({ id, tz }: { id: string; tz: string }) {
             <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
               <div>
                 <a className="font-medium text-ink hover:text-sage-700" href={signed.find((x: any) => x.path === d.storage_path)?.signedUrl ?? '#'} target="_blank" rel="noreferrer">{d.name}</a>
-                <div className="text-xs text-stone-500">{titleCase(d.category)} · uploaded {fmtDateTime(d.created_at, tz)}{d.expires_on && ` · expires ${fmtPlainDate(d.expires_on)}`}</div>
+                <div className="text-xs text-stone-500">{docLabel(d.category)} · uploaded {fmtDateTime(d.created_at, tz)}{d.expires_on && ` · expires ${fmtPlainDate(d.expires_on)}`}</div>
               </div>
               <ActionButton action={deleteDocument} fields={{ id: d.id }} variant="ghost" confirm="Delete this document permanently?">Delete</ActionButton>
             </li>
@@ -259,8 +274,8 @@ async function Documents({ id, tz }: { id: string; tz: string }) {
             <input type="hidden" name="user_id" value={id} />
             <Input type="file" name="file" required accept=".pdf,.jpg,.jpeg,.png,.webp,.docx" className="h-auto py-2" />
             <Input name="name" placeholder="Document name (optional)" />
-            <Select name="category" defaultValue="other">
-              {['contract', 'identification', 'tax', 'certification', 'training', 'policy', 'other'].map((c) => <option key={c} value={c}>{titleCase(c)}</option>)}
+            <Select name="category" defaultValue={DOC_TYPES.some(([k]) => k === defaultType) ? defaultType : 'drivers_license'}>
+              {DOC_TYPES.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
             </Select>
             <label className="block text-xs text-stone-500">Expires on<Input type="date" name="expires_on" /></label>
             <SubmitButton className="w-full" pendingText="Uploading…">Upload</SubmitButton>
@@ -334,5 +349,77 @@ async function Performance({ id, tz }: { id: string; tz: string }) {
         </CardBody>
       </Card>
     </div>
+  );
+}
+
+const KEY_DOCS: [string, string][] = [['drivers_license', "Driver's license"], ['background_check', 'Background check report'], ['resume', 'Résumé']];
+
+/** Everything about the employee at a glance: contacts, addresses, background check and key documents. */
+async function PersonnelFile({ id, p, u, tz }: { id: string; p: any; u: any; tz: string }) {
+  const supabase = await createClient();
+  const { data: docs } = await supabase.from('employee_documents').select('id,name,category,storage_path,expires_on,created_at')
+    .eq('employee_id', id).order('created_at', { ascending: false });
+  const list = (docs ?? []) as any[];
+  const signed = list.length ? (await supabase.storage.from('employee-documents').createSignedUrls(list.map((d) => d.storage_path), 600)).data ?? [] : [];
+  const url = (path: string): string | undefined => signed.find((x: any) => x.path === path)?.signedUrl ?? undefined;
+  const today = todayInTz(tz);
+  const soon = addDays(today, 30);
+  const bg = BACKGROUND_STATUS[p.background_check_status ?? 'not_started'] ?? BACKGROUND_STATUS.not_started;
+  const latest = (cat: string) => list.find((d) => d.category === cat);
+  const others = list.filter((d) => !KEY_DOCS.some(([c]) => c === d.category));
+  const missing = KEY_DOCS.filter(([c]) => !latest(c)).length
+    + (p.emergency_contact_name && p.emergency_contact_phone ? 0 : 1) + (p.address ? 0 : 1) + (p.background_check_status === 'clear' ? 0 : 1);
+  const label = (t: string) => <div className="text-xs font-semibold uppercase tracking-wide text-stone-400">{t}</div>;
+  const none = <span className="text-amber-700">Not on file</span>;
+
+  return (
+    <Card className="mb-6 max-w-3xl">
+      <CardHeader title="Personnel file" subtitle={missing ? `${missing} item${missing === 1 ? '' : 's'} still needed` : 'Complete'}
+        action={<LinkButton href={`/admin/employees/${id}?tab=documents`} variant="secondary" size="sm">All documents</LinkButton>} />
+      <CardBody className="grid gap-5 text-sm sm:grid-cols-2">
+        <div>{label('Contact')}<div className="mt-1 text-ink">{u.phone || none}</div><div className="text-stone-600">{u.email}</div></div>
+        <div>
+          {label('Emergency contact')}
+          {p.emergency_contact_name || p.emergency_contact_phone ? (
+            <div className="mt-1 text-ink">
+              {p.emergency_contact_name}{p.emergency_contact_relationship ? ` (${p.emergency_contact_relationship})` : ''}
+              {p.emergency_contact_phone && <div><a href={`tel:${p.emergency_contact_phone}`} className="text-sage-700 underline">{p.emergency_contact_phone}</a></div>}
+            </div>
+          ) : <div className="mt-1">{none}</div>}
+        </div>
+        <div>{label('Home address')}<div className="mt-1 text-ink">{p.address || none}</div></div>
+        <div>{label('Mailing address')}<div className="mt-1 text-ink">{p.mailing_address && p.mailing_address !== p.address ? p.mailing_address : p.address ? 'Same as home' : none}</div></div>
+        <div className="sm:col-span-2">
+          {label('Background check')}
+          <div className="mt-1 flex flex-wrap items-center gap-2"><Badge tone={bg.tone}>{bg.label}</Badge>{p.background_check_date && <span className="text-stone-600">{fmtPlainDate(p.background_check_date)}</span>}</div>
+        </div>
+        <div className="sm:col-span-2">
+          {label('Key documents')}
+          <ul className="mt-1 divide-y divide-stone-100 rounded-xl border border-stone-200">
+            {KEY_DOCS.map(([cat, name]) => {
+              const d = latest(cat);
+              const expired = d?.expires_on && d.expires_on < today;
+              const expiring = d?.expires_on && !expired && d.expires_on <= soon;
+              return (
+                <li key={cat} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                  <span className="font-medium text-ink">{name}</span>
+                  {d ? (
+                    <span className="flex flex-wrap items-center gap-2">
+                      {expired ? <Badge tone="red">Expired {fmtPlainDate(d.expires_on)}</Badge>
+                        : expiring ? <Badge tone="amber">Expires {fmtPlainDate(d.expires_on)}</Badge>
+                        : <Badge tone="green">On file{d.expires_on ? ` · expires ${fmtPlainDate(d.expires_on)}` : ''}</Badge>}
+                      {url(d.storage_path) && <a href={url(d.storage_path)} target="_blank" rel="noreferrer" className="text-sage-700 underline">View</a>}
+                    </span>
+                  ) : (
+                    <Link href={`/admin/employees/${id}?tab=documents&type=${cat}`} className="font-medium text-amber-700 underline">Missing — upload</Link>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {others.length > 0 && <p className="mt-2 text-xs text-stone-500">Also on file: {[...new Set(others.map((d) => docLabel(d.category)))].join(', ')}</p>}
+        </div>
+      </CardBody>
+    </Card>
   );
 }

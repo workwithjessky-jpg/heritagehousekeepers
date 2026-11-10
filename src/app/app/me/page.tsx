@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Plane, Bell, ChevronRight, LogOut, FileText, ShieldCheck } from 'lucide-react';
 import { requireRole, getSettings } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { fmtDateTime, fmtPlainDate, titleCase } from '@/lib/format';
+import { fmtDateTime, fmtPlainDate, titleCase, docLabel } from '@/lib/format';
 import { Card, CardHeader, CardBody, Field, Input, Checkbox } from '@/components/ui';
 import { ActionForm, SubmitButton } from '@/components/forms';
 import { updateMyProfile, changePassword } from '../actions';
@@ -39,8 +39,10 @@ export default async function CleanerProfile() {
             <Field label="Full name"><Input name="full_name" defaultValue={u?.full_name} required className="h-12 text-base" /></Field>
             <Field label="Phone"><Input name="phone" type="tel" defaultValue={u?.phone ?? ''} className="h-12 text-base" /></Field>
             <Field label="Home address"><Input name="address" defaultValue={p?.address ?? ''} className="h-12 text-base" /></Field>
+            <Field label="Mailing address" hint="Leave blank if it's the same as your home address"><Input name="mailing_address" defaultValue={p?.mailing_address ?? ''} className="h-12 text-base" /></Field>
             <Field label="Emergency contact name"><Input name="emergency_contact_name" defaultValue={p?.emergency_contact_name ?? ''} className="h-12 text-base" /></Field>
             <Field label="Emergency contact phone"><Input name="emergency_contact_phone" type="tel" defaultValue={p?.emergency_contact_phone ?? ''} className="h-12 text-base" /></Field>
+            <Field label="Emergency contact relationship"><Input name="emergency_contact_relationship" placeholder="e.g. Spouse, Parent" defaultValue={p?.emergency_contact_relationship ?? ''} className="h-12 text-base" /></Field>
             <Checkbox name="email_notifications" defaultChecked={u?.email_notifications} label="Email me notifications too" />
             <p className="text-xs text-stone-500">Email: {u?.email} (ask the office to change it)</p>
             <SubmitButton size="lg" className="w-full">Save</SubmitButton>
@@ -63,7 +65,7 @@ export default async function CleanerProfile() {
             {(docs as any[]).map((d) => (
               <li key={d.id} className="px-5 py-3">
                 <a className="font-medium text-sage-700" href={signed.find((x: any) => x.path === d.storage_path)?.signedUrl ?? '#'} target="_blank" rel="noreferrer">{d.name}</a>
-                <div className="text-xs text-stone-500">{titleCase(d.category)}{d.expires_on && ` · expires ${fmtPlainDate(d.expires_on)}`}</div>
+                <div className="text-xs text-stone-500">{docLabel(d.category)}{d.expires_on && ` · expires ${fmtPlainDate(d.expires_on)}`}</div>
               </li>
             ))}
           </ul>

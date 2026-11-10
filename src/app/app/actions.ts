@@ -153,6 +153,7 @@ export async function updateMyProfile(_p: ActionState, fd: FormData): Promise<Ac
       p_full_name: required(fd, 'full_name', 'Name'), p_phone: str(fd, 'phone'), p_address: str(fd, 'address'),
       p_emergency_name: str(fd, 'emergency_contact_name'), p_emergency_phone: str(fd, 'emergency_contact_phone'),
       p_email_notifications: bool(fd, 'email_notifications'),
+      p_mailing_address: str(fd, 'mailing_address'), p_emergency_relationship: str(fd, 'emergency_contact_relationship'),
     }));
     return 'Profile updated.';
   }, ['/app']);

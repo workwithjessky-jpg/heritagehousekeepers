@@ -282,6 +282,22 @@ async function main() {
   const outbox2 = await su(`select count(*)::int n from notification_deliveries where channel = 'email'`);
   check(`announcement queued ${outbox2[0].n} emails once email is enabled`, outbox2[0].n === 6);
 
+  // personnel file
+  console.log('\nPersonnel file');
+  await as(ids.a, `select update_my_profile('Jane Smith', '555-0100', '1 Home St, Fulshear TX', 'Tom Smith', '555-0199', true, 'PO Box 9, Fulshear TX', 'Spouse')`);
+  const [pf] = await as(ids.owner, `select mailing_address, emergency_contact_relationship, background_check_status from employee_profiles where user_id = $1`, [ids.a]);
+  check('cleaner saves own mailing address + emergency relationship', pf.mailing_address === 'PO Box 9, Fulshear TX' && pf.emergency_contact_relationship === 'Spouse');
+  check('background check starts as "not started"', pf.background_check_status === 'not_started');
+  await expectFail('cleaner cannot mark their own background check clear', () => as(ids.a, `update employee_profiles set background_check_status = 'clear' where user_id = $1 returning 1`, [ids.a]).then((r) => { if (!r.length) throw new Error('no rows updated'); }), /no rows|permission|row-level/i);
+  await as(ids.owner, `update employee_profiles set background_check_status = 'clear', background_check_date = '2026-11-01' where user_id = $1`, [ids.a]);
+  const [bgc] = await su(`select background_check_status from employee_profiles where user_id = $1`, [ids.a]);
+  check('manager records background check as clear', bgc.background_check_status === 'clear');
+  await expectFail('unknown background status rejected', () => su(`update employee_profiles set background_check_status = 'maybe' where user_id = $1`, [ids.a]), /check constraint/);
+  await expectOk("driver's license / background check / résumé document types accepted", () => su(
+    `insert into employee_documents (employee_id, name, category, storage_path, expires_on) values ($1,'DL','drivers_license','x/dl.jpg','2027-01-01'), ($1,'BG','background_check','x/bg.pdf',null), ($1,'CV','resume','x/cv.pdf',null)`, [ids.a]));
+  const docsSeen = await as(ids.b, `select count(*)::int n from employee_documents where employee_id = $1`, [ids.a]);
+  check("other cleaners cannot see someone's personnel documents", docsSeen[0].n === 0);
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 }
