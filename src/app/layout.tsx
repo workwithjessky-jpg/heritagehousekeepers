@@ -9,6 +9,10 @@ export const metadata: Metadata = {
   title: { default: 'Heritage Housekeepers | Operations Hub', template: '%s · Heritage Operations Hub' },
   description: 'Scheduling, attendance, timesheets and payroll for Heritage Housekeepers.',
   robots: { index: false, follow: false },
+  // absolute URLs for the link-preview image (src/app/opengraph-image.png)
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://heritagehousekeepers.vercel.app'),
+  openGraph: { title: 'Heritage Housekeepers | Operations Hub', siteName: 'Heritage Housekeepers', type: 'website' },
+  appleWebApp: { title: 'Heritage Ops', capable: true, statusBarStyle: 'default' },
 };
 
 export const viewport: Viewport = {
