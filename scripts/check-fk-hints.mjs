@@ -8,7 +8,7 @@ await db.exec(stub);
 for (const f of readdirSync('supabase/migrations').sort()) await db.exec(readFileSync(join('supabase/migrations', f), 'utf8'));
 const rows = (await db.query(`select conname, conrelid = confrelid as self from pg_constraint where contype='f'`)).rows;
 const fks = new Set(rows.map((r) => r.conname));
-// PostgREST can't resolve a self-referencing FK by constraint name; it needs the column (e.g. table!parent_id).
+// PostgREST can't resolve a self-referencing FK by constraint name; embed by column instead (alias:parent_id(...)).
 const selfFks = new Set(rows.filter((r) => r.self).map((r) => r.conname));
 const walk = (d) => readdirSync(d).flatMap((f) => statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)]);
 let bad = 0, n = 0;

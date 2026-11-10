@@ -26,7 +26,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
   const supabase = await createClient();
 
   const { data: job } = await supabase.from('cleaning_jobs')
-    .select('*, property:properties(*), client:clients(id,name,phone,email), checklist:cleaning_checklists(id,name), parent:cleaning_jobs!parent_job_id(id,title)')
+    .select('*, property:properties(*), client:clients(id,name,phone,email), checklist:cleaning_checklists(id,name), parent:parent_job_id(id,title)')
     .eq('id', id).single();
   if (!job) notFound();
 
