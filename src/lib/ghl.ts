@@ -321,11 +321,15 @@ export async function sendGhlAlert(db: Db, event: GhlAlertEvent, attendanceOrJob
   const url = alertsWebhookUrl();
   if (!url) return;
   try {
-    const [{ data: job }, { data: emp }, { data: settings }] = await Promise.all([
-      db.from('cleaning_jobs').select('id,title,scheduled_start,client:clients(id,name,phone,ghl_contact_id),property:properties(address)').eq('id', attendanceOrJob.jobId).single(),
-      db.from('users').select('full_name,phone').eq('id', attendanceOrJob.employeeId).single(),
-      db.from('company_settings').select('timezone').eq('id', 1).single(),
+    const [{ data: job }, { data: emp }, { data: settings }, { data: owner }] = await Promise.all([
+      db.from('cleaning_jobs').select('id,title,scheduled_start,client:clients(id,name),property:properties(address)').eq('id', attendanceOrJob.jobId).single(),
+      db.from('users').select('full_name').eq('id', attendanceOrJob.employeeId).single(),
+      db.from('company_settings').select('timezone,company_name').eq('id', 1).single(),
+      db.from('users').select('full_name,email').eq('role_key', 'owner').eq('is_active', true).order('created_at').limit(1).maybeSingle(),
     ]);
+    // GHL's Inbound Webhook must be linked ("Mapping Reference") to a contact. We give it the OFFICE contact
+    // (GHL_ALERTS_CONTACT_EMAIL, else the owner's login email) so the workflow can only ever reach the office.
+    const officeEmail = clean(process.env.GHL_ALERTS_CONTACT_EMAIL) || owner?.email || null;
     if (!job || !emp) return;
     const tz = settings?.timezone ?? 'America/Chicago';
     const time = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
@@ -338,7 +342,8 @@ export async function sendGhlAlert(db: Db, event: GhlAlertEvent, attendanceOrJob
     const site = (process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/$/, '');
     const body = {
       event, message,
-      cleaner_name: emp.full_name, cleaner_phone: emp.phone,
+      office_email: officeEmail, office_name: settings?.company_name ?? 'Heritage Housekeepers',
+      cleaner_name: emp.full_name,
       job_title: job.title, job_start: time(job.scheduled_start), address: where,
       client_name: (job as any).client?.name ?? null, // no client phone or contact id: these alerts are for the office only
       link: site ? `${site}/admin/jobs/${job.id}` : null,
