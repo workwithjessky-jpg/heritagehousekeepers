@@ -59,7 +59,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
   return (
     <>
       <PageHeader
-        title={<span className="flex flex-wrap items-center gap-3">{job.title} <StatusBadge map={JOB_STATUS} value={job.status} /> <DemoTag show={job.is_demo} /></span>}
+        title={<span className="flex flex-wrap items-center gap-3">{job.title} <StatusBadge map={JOB_STATUS} value={job.status} /> <DemoTag show={job.is_demo} />{job.source === 'ghl' && <Badge tone="blue">From GHL</Badge>}</span>}
         subtitle={<>{fmtDateTime(job.scheduled_start, tz)} – {fmtTime(job.scheduled_end, tz)} · {hours.toFixed(1)} h · {job.cleaning_type}{job.recurrence_rule !== 'none' && ` · repeats ${job.recurrence_rule}`}</>}
         actions={<>
           <LinkButton href={`/admin/jobs/new?parent=${job.id}`} variant="secondary">Schedule follow-up</LinkButton>

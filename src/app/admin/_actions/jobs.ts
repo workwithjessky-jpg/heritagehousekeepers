@@ -1,5 +1,6 @@
 'use server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { syncJobCompleted } from '@/lib/ghl';
 import { getSettings } from '@/lib/auth';
 import { run, must, str, num, bool, required, type ActionState } from '@/lib/actions';
 import { zonedToUtc } from '@/lib/format';
@@ -81,6 +82,7 @@ export async function setJobStatus(_p: ActionState, fd: FormData): Promise<Actio
     }
     if (status === 'completed') patch.completed_at = new Date().toISOString();
     must(await supabase.from('cleaning_jobs').update(patch).eq('id', required(fd, 'id')));
+    if (status === 'completed') await syncJobCompleted(createAdminClient(), required(fd, 'id'));
     return status === 'cancelled' ? 'Job cancelled and cleaners notified.' : 'Status updated.';
   }, ['/admin']);
 }

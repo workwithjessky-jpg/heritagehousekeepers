@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { CHANNELS } from '@/lib/notify/channels';
+import { retryFailedGhlSyncs } from '@/lib/ghl';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,5 +33,6 @@ export async function GET(req: NextRequest) {
       failed++;
     }
   }
-  return NextResponse.json({ sent, failed, skipped });
+  const ghlRetried = await retryFailedGhlSyncs(db);
+  return NextResponse.json({ sent, failed, skipped, ghlRetried });
 }

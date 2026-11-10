@@ -1,5 +1,6 @@
 'use server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { syncJobCompleted } from '@/lib/ghl';
 import { getSettings } from '@/lib/auth';
 import { run, must, str, num, bool, required, type ActionState } from '@/lib/actions';
 import { zonedToUtc } from '@/lib/format';
@@ -42,6 +43,7 @@ export async function clockOut(input: { attendanceId: string; lat: number | null
       p_attendance: input.attendanceId, p_lat: input.lat, p_lng: input.lng, p_accuracy: input.accuracy,
       p_break_minutes: input.breakMinutes, p_completion_exception: input.exception ?? null, p_notes: input.notes ?? null,
     })) as any;
+    if (ts.job_id && process.env.SUPABASE_SERVICE_ROLE_KEY) await syncJobCompleted(createAdminClient(), ts.job_id); // GHL: tag client when the job completed
     return { message: `Clocked out — ${Number(ts.total_hours).toFixed(2)} hours added to your timesheet.`, data: ts };
   }, ['/app']);
 }

@@ -5,6 +5,7 @@ import { titleCase } from '@/lib/format';
 import { Card, CardHeader, CardBody, PageHeader, Field, Input, Select, Textarea, Checkbox, Tabs, Table, Th, Td, Badge } from '@/components/ui';
 import { ActionForm, SubmitButton } from '@/components/forms';
 import { saveSettings } from '../_actions/settings';
+import { IntegrationsTab } from './integrations';
 
 export const metadata = { title: 'Settings' };
 
@@ -36,9 +37,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         { key: 'notifications', label: 'Notifications', href: '/admin/settings?tab=notifications' },
         { key: 'catalog', label: 'Services & hours', href: '/admin/settings?tab=catalog' },
         { key: 'roles', label: 'Roles & permissions', href: '/admin/settings?tab=roles' },
+        { key: 'integrations', label: 'Integrations', href: '/admin/settings?tab=integrations' },
       ]} />
 
-      <Card className="max-w-3xl">
+      <Card className={tab === 'integrations' ? 'max-w-5xl' : 'max-w-3xl'}>
         <CardBody>
           {tab === 'company' && (
             <Section name="company">
@@ -140,6 +142,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </div>
             </Section>
           )}
+
+          {tab === 'integrations' && <IntegrationsTab tz={s.timezone} />}
 
           {tab === 'roles' && (
             <div className="space-y-6">
