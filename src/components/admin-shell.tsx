@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, CalendarDays, MapPin, Clock, Wallet, Users, Plane, Building2, ShieldCheck, ListChecks,
-  Megaphone, BarChart3, Settings, History, Menu, X, LogOut,
+  Megaphone, BarChart3, Settings, History, Menu, X, LogOut, Bell, Plus,
 } from 'lucide-react';
 import { Logo } from './brand';
 import { NotificationBell } from './notification-bell';
@@ -14,17 +14,18 @@ type Role = 'owner' | 'ops_manager' | 'office_admin' | 'cleaner';
 const ALL: Role[] = ['owner', 'ops_manager', 'office_admin'];
 const SUP: Role[] = ['owner', 'ops_manager'];
 
-export const ADMIN_NAV: { href: string; label: string; icon: any; roles: Role[]; group: string }[] = [
+export const ADMIN_NAV: { href: string; label: string; icon: any; roles: Role[]; group: string; also?: string[] }[] = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, roles: ALL, group: 'Operations' },
-  { href: '/admin/schedule', label: 'Schedule & Dispatch', icon: CalendarDays, roles: ALL, group: 'Operations' },
+  { href: '/admin/schedule', label: 'Schedule & Jobs', icon: CalendarDays, roles: ALL, group: 'Operations', also: ['/admin/jobs'] },
   { href: '/admin/attendance', label: 'Attendance & GPS', icon: MapPin, roles: ALL, group: 'Operations' },
   { href: '/admin/quality', label: 'Quality Control', icon: ShieldCheck, roles: ALL, group: 'Operations' },
   { href: '/admin/timesheets', label: 'Timesheets', icon: Clock, roles: ALL, group: 'People & Pay' },
   { href: '/admin/payroll', label: 'Payroll', icon: Wallet, roles: SUP, group: 'People & Pay' },
   { href: '/admin/employees', label: 'Employees', icon: Users, roles: ALL, group: 'People & Pay' },
   { href: '/admin/time-off', label: 'Time Off', icon: Plane, roles: ALL, group: 'People & Pay' },
-  { href: '/admin/clients', label: 'Clients & Properties', icon: Building2, roles: ALL, group: 'Customers' },
+  { href: '/admin/clients', label: 'Clients & Properties', icon: Building2, roles: ALL, group: 'Customers', also: ['/admin/properties'] },
   { href: '/admin/checklists', label: 'Checklists', icon: ListChecks, roles: ALL, group: 'Customers' },
+  { href: '/admin/notifications', label: 'Notifications', icon: Bell, roles: ALL, group: 'Company' },
   { href: '/admin/announcements', label: 'Announcements', icon: Megaphone, roles: ALL, group: 'Company' },
   { href: '/admin/reports', label: 'Reports', icon: BarChart3, roles: SUP, group: 'Company' },
   { href: '/admin/settings', label: 'Settings', icon: Settings, roles: ['owner'], group: 'Company' },
@@ -44,7 +45,8 @@ export function AdminShell({ user, unread, children }: { user: { id: string; ful
           <div className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-stone-400">{g}</div>
           <div className="space-y-0.5">
             {items.filter((i) => i.group === g).map((i) => {
-              const active = i.href === '/admin' ? path === '/admin' : path.startsWith(i.href);
+              const under = (h: string) => path === h || path.startsWith(h + '/');
+              const active = i.href === '/admin' ? path === '/admin' : [i.href, ...(i.also ?? [])].some(under);
               const Icon = i.icon;
               return (
                 <Link key={i.href} href={i.href} onClick={() => setOpen(false)}
@@ -108,6 +110,9 @@ export function AdminShell({ user, unread, children }: { user: { id: string; ful
           <Logo className="h-7 w-auto lg:hidden" />
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/admin/jobs/new" className="inline-flex items-center gap-1.5 rounded-xl bg-sage-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-sage-800">
+            <Plus className="size-4" /> <span className="hidden sm:inline">New job</span>
+          </Link>
           <NotificationBell userId={user.id} initialUnread={unread} href="/admin/notifications" />
         </div>
       </header>

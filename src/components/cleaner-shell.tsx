@@ -27,7 +27,8 @@ export function CleanerShell({ userId, unread, children }: { userId: string; unr
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto grid max-w-xl grid-cols-5">
           {TABS.map((t) => {
-            const active = t.href === '/app' ? path === '/app' : path.startsWith(t.href);
+            const active = t.href === '/app' ? path === '/app' || path.startsWith('/app/jobs/') || path.startsWith('/app/notifications')
+              : t.href === '/app/me' ? path.startsWith('/app/me') || path.startsWith('/app/time-off') : path.startsWith(t.href);
             const Icon = t.icon;
             return (
               <Link key={t.href} href={t.href} className={cx('flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium', active ? 'text-sage-700' : 'text-stone-500')}>

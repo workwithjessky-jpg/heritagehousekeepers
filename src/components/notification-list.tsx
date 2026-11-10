@@ -21,7 +21,7 @@ export async function NotificationList({ tz, limit = 100 }: { tz: string; limit?
             <li key={n.id} className={cx('flex items-start gap-3 px-5 py-3', !n.read_at && 'bg-sage-50/50')}>
               <span className={cx('mt-1.5 size-2 shrink-0 rounded-full', n.read_at ? 'bg-transparent' : 'bg-sage-600')} />
               <div className="min-w-0 flex-1">
-                {n.link ? <Link href={n.link} className="text-sm font-medium text-ink hover:text-sage-700">{n.title}</Link> : <span className="text-sm font-medium text-ink">{n.title}</span>}
+                {n.link ? <a href={`/notifications/${n.id}`} className="text-sm font-medium text-ink hover:text-sage-700">{n.title}</a> : <span className="text-sm font-medium text-ink">{n.title}</span>}
                 {n.body && <p className="text-sm text-stone-600">{n.body}</p>}
                 <p className="text-xs text-stone-400">{fmtDateTime(n.created_at, tz)}</p>
               </div>

@@ -24,7 +24,7 @@ export function NotificationBell({ userId, initialUnread, href }: { userId: stri
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
         (payload: any) => {
           setUnread((n) => n + 1);
-          setToast({ title: payload.new.title, body: payload.new.body, link: payload.new.link });
+          setToast({ title: payload.new.title, body: payload.new.body, link: payload.new.link ? `/notifications/${payload.new.id}` : undefined });
           router.refresh();
         })
       .subscribe();
@@ -52,7 +52,7 @@ export function NotificationBell({ userId, initialUnread, href }: { userId: stri
           <button onClick={() => setToast(null)} className="absolute top-2 right-3 text-stone-400 hover:text-stone-600" aria-label="Dismiss">×</button>
           <p className="pr-4 text-sm font-semibold text-ink">{toast.title}</p>
           {toast.body && <p className="mt-0.5 text-sm text-stone-600">{toast.body}</p>}
-          {toast.link && <Link href={toast.link} onClick={() => setToast(null)} className="mt-2 inline-block text-sm font-medium text-sage-700 hover:underline">Open</Link>}
+          {toast.link && <a href={toast.link} className="mt-2 inline-block text-sm font-medium text-sage-700 hover:underline">Open</a>}
         </div>
       )}
     </>
