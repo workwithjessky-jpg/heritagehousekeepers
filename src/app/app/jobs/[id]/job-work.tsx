@@ -6,19 +6,31 @@ import { getBrowserClient } from '@/lib/supabase/client';
 import { cx, Badge, Input } from '@/components/ui';
 import { saveChecklistItem, addJobPhoto } from '../../actions';
 
-/** Downscale photos on the phone before upload (saves data + storage). Falls back to the original file. */
+/**
+ * Shrink photos on the phone before upload: longest side 1280 px, JPEG quality 0.72 — typically
+ * 150–300 KB instead of 2–5 MB, still sharp for before/after and checklist proof. Saves mobile data
+ * and storage. HEIC (iPhone) is converted too where the browser can read it. Never uploads a
+ * "compressed" file that is bigger than the original; falls back to the original if anything fails.
+ */
+const MAX_SIDE = 1280;
+const QUALITY = 0.72;
 async function compress(file: File): Promise<{ blob: Blob; ext: string; type: string }> {
+  const original = { blob: file as Blob, ext: (file.name.split('.').pop() || 'jpg').toLowerCase(), type: file.type || 'image/jpeg' };
   try {
-    if (!file.type.startsWith('image/') || /heic|heif/i.test(file.type)) throw new Error('skip');
-    const bmp = await createImageBitmap(file);
-    const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    if (file.type && !file.type.startsWith('image/')) return original;
+    const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const scale = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(bmp.width * scale); canvas.height = Math.round(bmp.height * scale);
-    canvas.getContext('2d')!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error('encode'))), 'image/jpeg', 0.82));
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); // transparent PNGs → white, not black
+    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bmp.close();
+    const blob = await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error('encode'))), 'image/jpeg', QUALITY));
+    if (blob.size >= file.size && !/heic|heif/i.test(file.type)) return original;
     return { blob, ext: 'jpg', type: 'image/jpeg' };
   } catch {
-    return { blob: file, ext: (file.name.split('.').pop() || 'jpg').toLowerCase(), type: file.type || 'image/jpeg' };
+    return original;
   }
 }
 
