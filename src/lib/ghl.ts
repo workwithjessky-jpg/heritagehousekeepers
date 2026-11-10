@@ -78,13 +78,17 @@ export function parseGhlPayload(body: any): GhlEvent {
   const tags = Array.isArray(body?.tags) ? body.tags.map(s) : s(body?.tags) ? s(body.tags).split(',').map((t: string) => t.trim()) : [];
 
   const cal = body?.calendar ?? body?.appointment ?? null;
+  // A calendar's "address" is often the business's own location (where meetings happen), not the client's
+  // home. Never use the business address as a cleaning property.
+  const bizAddrs = [s(body?.location?.fullAddress), s(body?.location?.address)].filter(Boolean).map(keyNorm);
+  const notBusiness = (a: string) => (a && !bizAddrs.some((b) => b && (keyNorm(a) === b || keyNorm(a).startsWith(b))) ? a : null);
   const apptId = s(cal?.appointmentId ?? cal?.appointment_id ?? cal?.id ?? body?.appointment_id ?? cd.appointment_id);
   const start = s(cal?.startTime ?? cal?.start_time ?? body?.start_time ?? cd.start_time);
   const appointment: GhlAppointment | null = apptId && start ? {
     id: apptId, start, end: s(cal?.endTime ?? cal?.end_time ?? body?.end_time ?? cd.end_time) || null,
     status: (s(cal?.appoinmentStatus ?? cal?.appointmentStatus ?? cal?.status ?? cd.status) || 'booked').toLowerCase(),
     title: s(cal?.title), calendarName: s(cal?.calendarName ?? cal?.calendar_name), notes: s(cal?.notes) || null,
-    timezone: s(cal?.selectedTimezone ?? cal?.timezone ?? body?.timezone) || null, address: s(cal?.address) || null,
+    timezone: s(cal?.selectedTimezone ?? cal?.timezone ?? body?.timezone) || null, address: notBusiness(s(cal?.address)),
   } : null;
 
   // Contact custom fields arrive as top-level keys named after the field ("Cleaning Type", "# Bedrooms", …).
@@ -178,14 +182,15 @@ async function upsertProperty(db: Db, clientId: string, address: string, test: b
   return { id: data.id as string, created: true, geocoded: !!g };
 }
 
-export async function handleGhlEvent(db: Db, ev: GhlEvent): Promise<Result> {
+export async function handleGhlEvent(db: Db, ev: GhlEvent, opts: { quiet?: boolean } = {}): Promise<Result> {
   if (!ev.contact) return { status: 'ignored', message: 'No contact id in payload' };
   const { data: settings } = await db.from('company_settings').select('*').eq('id', 1).single();
   const tz = settings?.timezone ?? 'America/New_York';
   const client = await upsertClient(db, ev.contact, ev.test);
   const notes: string[] = [client.created ? 'client created' : 'client updated'];
 
-  const address = ev.appointment?.address || ev.contact.address;
+  // the client's own (contact) address first; a calendar address only when the contact has none
+  const address = ev.contact.address || ev.appointment?.address;
   let propertyId: string | null = null;
   if (address) {
     const p = await upsertProperty(db, client.id, address, ev.test, ev.cleaningType, ev.home);
@@ -249,7 +254,7 @@ export async function handleGhlEvent(db: Db, ev: GhlEvent): Promise<Result> {
     status: 'scheduled', source: 'ghl', ghl_appointment_id: a.id, is_demo: ev.test,
   }).select('id').single();
   if (error) throw error;
-  await db.rpc('notify_staff', {
+  if (!opts.quiet) await db.rpc('notify_staff', {
     p_event: 'schedule_change', p_type: 'ghl_booking', p_title: 'New booking from GoHighLevel',
     p_body: `${ev.contact.name} — ${type}. Needs a cleaner.`, p_link: `/admin/jobs/${created.id}`, p_roles: ['owner', 'ops_manager', 'office_admin'],
   });

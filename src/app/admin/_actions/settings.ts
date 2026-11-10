@@ -136,3 +136,20 @@ export async function updateTask(_p: ActionState, fd: FormData): Promise<ActionS
     return 'Task saved.';
   }, ['/admin/checklists']);
 }
+
+/** Settings → Integrations: import appointments that already exist in the chosen GHL calendars. Owner only. */
+export async function importFromGhl(_p: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const { getCurrentUser } = await import('@/lib/auth');
+    const me = await getCurrentUser();
+    if (me?.role !== 'owner') throw new Error('Only the owner can import from GoHighLevel');
+    const { createAdminClient } = await import('@/lib/supabase/server');
+    const { importGhlAppointments } = await import('@/lib/ghl-import');
+    const ids = fd.getAll('calendar').map(String).filter(Boolean);
+    if (!ids.length) throw new Error('Tick at least one calendar');
+    const days = Math.min(Math.max(num(fd, 'days') ?? 60, 1), 365);
+    const r = await importGhlAppointments(createAdminClient(), ids, days);
+    const head = `Found ${r.appointments} appointment(s): ${r.jobsCreated} new job(s), ${r.updated} already here, ${r.skipped} skipped.`;
+    return r.problems.length ? `${head} Check the activity log below for details.` : head;
+  }, ['/admin']);
+}
